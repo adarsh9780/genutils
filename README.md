@@ -7,16 +7,15 @@ ALLOWED_NODE_TYPES = {
     'Module', 'Expr', 'Assign', 'AugAssign', 'For', 'While', 'If', 'Compare',
     'BoolOp', 'BinOp', 'UnaryOp', 'Call', 'Name', 'Load', 'Store', 'Constant',
     'List', 'Tuple', 'Dict', 'Subscript', 'Index', 'Slice', 'Attribute',
-    'IfExp', 'Return'
+    'IfExp', 'Return', 'alias'
 }
 
 # Whitelist of importable modules
 ALLOWED_MODULES = {'pandas', 'numpy'}
 
-# Optional: whitelist of allowed function names
+# Optional: whitelist of allowed standalone functions
 ALLOWED_FUNCTIONS = {
     'len', 'range', 'min', 'max', 'sum', 'sorted',
-    # pandas and numpy functions will be accessed via pd.<func> or np.<func>
 }
 
 # Blocked attributes to prevent introspection
@@ -29,17 +28,17 @@ class ASTWhitelist(ast.NodeVisitor):
 
     def generic_visit(self, node):
         node_name = type(node).__name__
+        # Allow Import and ImportFrom separately
         if node_name not in ALLOWED_NODE_TYPES and node_name not in {'Import', 'ImportFrom'}:
             raise ValueError(f"Disallowed AST node type: {node_name}")
         super().generic_visit(node)
 
     def visit_Import(self, node):
-        # Allow only whitelisted modules
+        # Allow only whitelisted modules (with alias support)
         for alias in node.names:
             mod = alias.name.split('.')[0]
             if mod not in ALLOWED_MODULES:
                 raise ValueError(f"Import of module '{mod}' is not allowed.")
-        # Continue validation of alias usage
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
@@ -56,18 +55,22 @@ class ASTWhitelist(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Call(self, node):
-        # Ensure called function is allowed
+        # Validate the function being called
         func = node.func
         if isinstance(func, ast.Name):
-            if func.id not in ALLOWED_FUNCTIONS and func.id not in {'pd', 'np'}:
+            # standalone function calls must be whitelisted
+            if func.id not in ALLOWED_FUNCTIONS:
                 raise ValueError(f"Call to function '{func.id}' is not whitelisted.")
         elif isinstance(func, ast.Attribute):
-            # allow pd.* and np.*
-            if (isinstance(func.value, ast.Name)
-                    and func.value.id not in {'pd', 'np'}):
-                raise ValueError(f"Calls on '{func.value.id}' are not allowed.")
+            # method calls (e.g. df.groupby(), pd.read_csv()) are allowed
+            # but ensure attribute itself isn't blocked
+            if func.attr in BLOCKED_ATTRIBUTES:
+                raise ValueError(f"Call to attribute '{func.attr}' is not allowed.")
+            # visit the base object
+            self.visit(func.value)
         else:
             raise ValueError("Unsupported function call structure.")
+        # Visit arguments and keywords to ensure they're safe
         for arg in node.args:
             self.visit(arg)
         for kw in node.keywords:
@@ -91,11 +94,11 @@ def safe_execute(code_str: str, env: dict):
 if __name__ == '__main__':
     user_code = '''
 import pandas as pd
-from numpy import array
+from numpy import array as arr
 
-result = df[df['sub_lob_for_flash']=='REB']
-arr = array([1,2,3])
-result_df = result.groupby('geo')['exposure'].sum().nlargest(4)
+filtered = df[df['sub_lob_for_flash']=='REB']
+grouped = filtered.groupby('geo')['exposure'].sum()
+top4 = grouped.nlargest(4)
 '''
     import pandas as pd
     import numpy as np
@@ -108,5 +111,5 @@ result_df = result.groupby('geo')['exposure'].sum().nlargest(4)
     env = {'pd': pd, 'np': np, 'df': df.copy()}
 
     safe_execute(user_code, env)
-    print(env['result_df'])  # check the result
+    print(env['top4'])  # check the result
 ```
