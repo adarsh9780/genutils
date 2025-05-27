@@ -1,3 +1,4 @@
+```python
 import ast
 import builtins
 
@@ -103,4 +104,4 @@ result_df = result.groupby('geo')['exposure'].sum().nlargest(4)
     env = {'pd': pd, 'np': np, 'df': df.copy()}
 
     safe_execute(user_code, env)
-    print(env['result_df'])  # check the result
+    print(env['result_df'])  # check the result```
