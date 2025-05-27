@@ -10,16 +10,17 @@ ALLOWED_NODE_TYPES = {
     'IfExp', 'Return'
 }
 
+# Whitelist of importable modules
+ALLOWED_MODULES = {'pandas', 'numpy'}
+
 # Optional: whitelist of allowed function names
 ALLOWED_FUNCTIONS = {
     'len', 'range', 'min', 'max', 'sum', 'sorted',
     # pandas and numpy functions will be accessed via pd.<func> or np.<func>
 }
 
-# Blocked modules or attributes
-BLOCKED_MODULES = {'os', 'sys', 'subprocess', 'shutil'}
+# Blocked attributes to prevent introspection
 BLOCKED_ATTRIBUTES = {'__globals__', '__code__', '__closure__', '__self__'}
-
 
 class ASTWhitelist(ast.NodeVisitor):
     """
@@ -28,27 +29,34 @@ class ASTWhitelist(ast.NodeVisitor):
 
     def generic_visit(self, node):
         node_name = type(node).__name__
-        if node_name not in ALLOWED_NODE_TYPES:
+        if node_name not in ALLOWED_NODE_TYPES and node_name not in {'Import', 'ImportFrom'}:
             raise ValueError(f"Disallowed AST node type: {node_name}")
         super().generic_visit(node)
 
     def visit_Import(self, node):
-        raise ValueError("Import statements are not allowed.")
+        # Allow only whitelisted modules
+        for alias in node.names:
+            mod = alias.name.split('.')[0]
+            if mod not in ALLOWED_MODULES:
+                raise ValueError(f"Import of module '{mod}' is not allowed.")
+        # Continue validation of alias usage
+        self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
-        raise ValueError("Import-from statements are not allowed.")
+        # Allow only whitelisted modules
+        mod = node.module.split('.')[0] if node.module else ''
+        if mod not in ALLOWED_MODULES:
+            raise ValueError(f"Import-from module '{mod}' is not allowed.")
+        self.generic_visit(node)
 
     def visit_Attribute(self, node):
-        # Check for dangerous module or attribute access
-        if isinstance(node.value, ast.Name) and node.value.id in BLOCKED_MODULES:
-            raise ValueError(f"Access to module '{node.value.id}' is not allowed.")
+        # Prevent introspection on dangerous attributes
         if node.attr in BLOCKED_ATTRIBUTES:
             raise ValueError(f"Access to attribute '{node.attr}' is not allowed.")
         self.generic_visit(node)
 
     def visit_Call(self, node):
         # Ensure called function is allowed
-        # e.g., pd.DataFrame or np.array are ok because Name is pd/np
         func = node.func
         if isinstance(func, ast.Name):
             if func.id not in ALLOWED_FUNCTIONS and func.id not in {'pd', 'np'}:
@@ -60,7 +68,6 @@ class ASTWhitelist(ast.NodeVisitor):
                 raise ValueError(f"Calls on '{func.value.id}' are not allowed.")
         else:
             raise ValueError("Unsupported function call structure.")
-        # Visit args and keywords
         for arg in node.args:
             self.visit(arg)
         for kw in node.keywords:
@@ -69,30 +76,27 @@ class ASTWhitelist(ast.NodeVisitor):
 
 def safe_execute(code_str: str, env: dict):
     """
-    Parse, validate, compile, and execute code_str in env.
+    Parse, validate, compile, and execute code_str in env with module imports restricted to ALLOWED_MODULES.
 
     Raises:
-        ValueError on disallowed syntax.
+        ValueError on disallowed syntax or imports.
     """
-    # Parse into AST
     tree = ast.parse(code_str, mode='exec')
-
-    # Validate AST
     ASTWhitelist().visit(tree)
-
-    # Compile and execute
     compiled = compile(tree, filename='<user_code>', mode='exec')
     exec(compiled, env, env)
     return env
 
-
 # Example usage:
 if __name__ == '__main__':
     user_code = '''
+import pandas as pd
+from numpy import array
+
 result = df[df['sub_lob_for_flash']=='REB']
+arr = array([1,2,3])
 result_df = result.groupby('geo')['exposure'].sum().nlargest(4)
 '''
-    # Prepare environment
     import pandas as pd
     import numpy as np
     df = pd.DataFrame({
@@ -104,4 +108,5 @@ result_df = result.groupby('geo')['exposure'].sum().nlargest(4)
     env = {'pd': pd, 'np': np, 'df': df.copy()}
 
     safe_execute(user_code, env)
-    print(env['result_df'])  # check the result```
+    print(env['result_df'])  # check the result
+```
