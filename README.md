@@ -1,3 +1,49 @@
+from pydantic import BaseModel, Field
+from typing import get_args, get_origin, Union
+
+def simplify_type(annotation):
+    """Simplify type annotations for LLM-friendly output."""
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is Union:
+        arg_types = [simplify_type(arg) for arg in args if arg is not type(None)]
+        return f"Optional[{', '.join(arg_types)}]" if type(None) in args else ', '.join(arg_types)
+    elif origin is list or origin is List:
+        return f"List[{simplify_type(args[0])}]"
+    elif origin is dict or origin is Dict:
+        return f"Dict[{simplify_type(args[0])}, {simplify_type(args[1])}]"
+    elif hasattr(annotation, '__name__'):
+        return annotation.__name__
+    else:
+        return str(annotation)
+
+def generate_llm_prompt_schema(model: BaseModel) -> str:
+    lines = []
+    for name, field in model.model_fields.items():
+        field_type = simplify_type(field.annotation)
+        description = field.description or ""
+        optional = "Optional" if not field.is_required() else "Required"
+        lines.append(f"- {name} ({field_type}, {optional}): {description}")
+    return "\n".join(lines)
+
+# Example usage
+class User(BaseModel):
+    id: int
+    name: str
+    email: str = Field(..., description="User email address")
+    is_active: bool = True
+    tags: list[str] = []
+    metadata: dict[str, str] = {}
+
+prompt_schema = generate_llm_prompt_schema(User)
+print(prompt_schema)
+
+
+
+
+
+
 Here’s a concise “pitch deck” for why each of these audiences should adopt your natural-language pandas chatbot, organized by persona:
 
 ## Executive Summary
