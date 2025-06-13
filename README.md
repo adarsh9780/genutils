@@ -1,3 +1,4 @@
+```python
 from pydantic import BaseModel, Field
 from typing import get_args, get_origin, Union
 
@@ -38,6 +39,7 @@ class User(BaseModel):
 
 prompt_schema = generate_llm_prompt_schema(User)
 print(prompt_schema)
+```
 
 
 
