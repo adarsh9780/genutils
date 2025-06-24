@@ -1,3 +1,4 @@
+```python
 from nicegui import ui
 
 # Chat history container
@@ -33,3 +34,4 @@ with ui.column().classes('items-center justify-center min-h-screen'):
 
 # Run the NiceGUI app
 ui.run()
+```
