@@ -1,3 +1,4 @@
+```python
 import pandas as pd
 import numpy as np
 
@@ -38,3 +39,4 @@ final_df = final_df.sample(frac=1, random_state=42).reset_index(drop=True)
 
 print(f"Total rows: {len(final_df)}")
 print(final_df['category'].value_counts())
+```
