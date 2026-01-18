@@ -1,3 +1,4 @@
+```python
 DATE_EXTRACTION_PROMPT = """
 You are a Financial Event Analyst. 
 Your goal is to extract the specific timeline of the corporate action from the news text.
@@ -18,3 +19,4 @@ Your goal is to extract the specific timeline of the corporate action from the n
     "confidence": 0.0 to 1.0
 }
 """
+```
