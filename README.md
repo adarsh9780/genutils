@@ -23,4 +23,9 @@ def standardize_column_names(df):
         
     df.columns = new_columns
     return df
+
+
+# ... (Your existing list) ...
+- **DIVIDEND_POLICY**: Dividend declarations, special dividends, yield changes, ex-dividend dates.
+- **PRODUCT_TECH_LAUNCH**: Non-pharma product launches, technology reveals, R&D breakthroughs.
 ```
