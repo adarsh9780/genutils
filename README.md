@@ -2,41 +2,50 @@
 import pandas as pd
 import numpy as np
 
-# 1. Setup: Calculate targets
-target_total = 1000
-num_categories = df['category'].nunique()
-base_n = target_total // num_categories  # Returns 28
-remainder = target_total % num_categories # Returns 20
-
-# 2. Define a sampling function
-def get_stratified_sample(group):
-    # If a category has fewer rows than we want, take them all
-    n_to_take = min(len(group), base_n)
-    return group.sample(n=n_to_take, random_state=42)
-
-# 3. Take the base samples (approx 980 rows)
-sampled_df = df.groupby('category', group_keys=False).apply(get_stratified_sample)
-
-# 4. Fill the gap to reach exactly 1000
-current_count = len(sampled_df)
-needed = target_total - current_count
-
-if needed > 0:
-    # Identify rows we haven't picked yet
-    remaining_pool = df.drop(sampled_df.index)
+def get_balanced_dataset(df, col_name, target_total, random_state=42):
+    """
+    Returns a dataframe with exactly 'target_total' rows, balanced across the categorical column.
     
-    # Sample the 'needed' amount from the remaining pool
-    # This distributes the remainder randomly across categories
-    remainder_df = remaining_pool.sample(n=needed, random_state=42)
+    Parameters:
+    - df: The source dataframe.
+    - col_name: The name of the categorical column.
+    - target_total: The exact number of rows desired in the output.
+    - random_state: Seed for reproducibility.
+    """
     
-    # Combine them
-    final_df = pd.concat([sampled_df, remainder_df])
-else:
-    final_df = sampled_df
+    # 0. Safety Check: If target is larger than data, return everything
+    if target_total >= len(df):
+        return df.copy()
 
-# Shuffle the final result so categories aren't clumped
-final_df = final_df.sample(frac=1, random_state=42).reset_index(drop=True)
+    # 1. Calculate base samples per category
+    num_categories = df[col_name].nunique()
+    base_n = target_total // num_categories
+    
+    # 2. Define stratified sampler
+    def sampler(group):
+        # Take base_n, or all items if the category is small
+        return group.sample(n=min(len(group), base_n), random_state=random_state)
 
-print(f"Total rows: {len(final_df)}")
-print(final_df['category'].value_counts())
+    # 3. Take the base samples
+    sampled_df = df.groupby(col_name, group_keys=False).apply(sampler)
+    
+    # 4. Fill the gap to reach exactly target_total
+    current_count = len(sampled_df)
+    needed = target_total - current_count
+    
+    if needed > 0:
+        # Get rows that weren't picked in the first pass
+        # Note: This relies on unique indices in your dataframe
+        remaining_pool = df.drop(sampled_df.index)
+        
+        # Sample the remainder from the general pool
+        remainder_df = remaining_pool.sample(n=needed, random_state=random_state)
+        
+        # Combine
+        final_df = pd.concat([sampled_df, remainder_df])
+    else:
+        final_df = sampled_df
+
+    # 5. Final Shuffle
+    return final_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
 ```
