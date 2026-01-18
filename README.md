@@ -1,46 +1,58 @@
 ```python
-import pandas as pd
-import numpy as np
-
-def get_balanced_dataset(df, col_name, target_total, random_state=42):
+def get_balanced_dataset(
+    df: pd.DataFrame, 
+    col_name: str | List[str], 
+    target_total: int, 
+    random_state: int = 42
+) -> pd.DataFrame:
     """
-    Returns a dataframe with exactly 'target_total' rows, balanced across the categorical column.
-    Uses 'head()' instead of 'apply()' to avoid Pandas 2.2+ warnings and improve performance.
+    Returns a dataframe with exactly 'target_total' rows, balanced across the categorical column(s).
+    
+    Parameters:
+    - df: Source dataframe.
+    - col_name: A single column name (str) or list of column names (List[str]).
+    - target_total: Total number of rows desired.
+    - random_state: Seed for reproducibility.
     """
     
     # 0. Safety Check
     if target_total >= len(df):
         return df.copy()
 
-    # 1. Shuffle the data first
-    # This ensures that when we take the 'head' (first N rows), they are random.
-    shuffled_df = df.sample(frac=1, random_state=random_state)
+    # 1. Shuffle data first (crucial for random sampling via head)
+    shuffled_df: pd.DataFrame = df.sample(frac=1, random_state=random_state)
     
-    # 2. Calculate base samples per category
-    num_categories = df[col_name].nunique()
-    base_n = target_total // num_categories
+    # 2. Calculate base samples per group
+    # df.groupby() returns a DataFrameGroupBy object, .ngroups gives the count
+    num_unique_groups: int = df.groupby(col_name).ngroups
+    
+    # Avoid division by zero if dataframe is empty, though len check handles most cases
+    if num_unique_groups == 0:
+        return df.iloc[0:0] 
+
+    base_n: int = target_total // num_unique_groups
     
     # 3. Take base samples using head()
-    # head(n) takes the first n rows. If a group has fewer than n, it takes them all.
-    sampled_df = shuffled_df.groupby(col_name).head(base_n)
+    sampled_df: pd.DataFrame = shuffled_df.groupby(col_name).head(base_n)
     
     # 4. Fill the gap to reach exactly target_total
-    current_count = len(sampled_df)
-    needed = target_total - current_count
+    current_count: int = len(sampled_df)
+    needed: int = target_total - current_count
+    
+    final_df: pd.DataFrame
     
     if needed > 0:
         # Identify rows we haven't picked yet
-        # We use the index to find the difference
-        remaining_pool = df.drop(sampled_df.index)
+        remaining_pool: pd.DataFrame = df.drop(sampled_df.index)
         
         # Sample the needed amount from the rest
-        remainder_df = remaining_pool.sample(n=needed, random_state=random_state)
+        remainder_df: pd.DataFrame = remaining_pool.sample(n=needed, random_state=random_state)
         
         # Combine
         final_df = pd.concat([sampled_df, remainder_df])
     else:
         final_df = sampled_df
 
-    # 5. Final Shuffle to mix the categories together
+    # 5. Final Shuffle
     return final_df.sample(frac=1, random_state=random_state).reset_index(drop=True)
 ```
