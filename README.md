@@ -1,36 +1,36 @@
 ```python
-import os
-import oracledb
+SENTIMENT_ANALYSIS_PROMPT = """
+You are a Senior Financial Market Analyst.
+Your goal is to determine the **Market Implied Sentiment** of a news article for a specific company.
 
-# 1. Force settings directly in Python to rule out Environment Variable issues
-os.environ['TNS_ADMIN'] = r'H:\tnsnames'
-os.environ['KRB5_CONFIG'] = r'h:\kerberos\krb5.conf'
-os.environ['KRB5CCNAME'] = r'C:\users\o739240\krb5cc_o739240'
+## TARGET COMPANY
+Analyze the sentiment specifically for: **{company_name}**
+(Ignore sentiment for competitors or the general market unless it directly impacts the target).
 
-print("--- DIAGNOSTICS ---")
-print(f"TNS_ADMIN:   {os.environ.get('TNS_ADMIN')}")
-print(f"KRB5_CONFIG: {os.environ.get('KRB5_CONFIG')}")
-print(f"KRB5CCNAME:  {os.environ.get('KRB5CCNAME')}")
+## TASK
+Determine how a rational investor would react to this news regarding the target company's stock price.
 
-# Check if files actually exist
-if not os.path.exists(os.path.join(os.environ['TNS_ADMIN'], 'sqlnet.ora')):
-    print("!! WARNING: sqlnet.ora not found in TNS_ADMIN path !!")
-if not os.path.exists(os.environ['KRB5CCNAME']):
-    print("!! WARNING: Ticket cache file not found !!")
+## SENTIMENT CATEGORIES (Select ONE)
+- **POSITIVE**: The news suggests the stock price should RISE. 
+  - Examples: Earnings beat, raised guidance, new contract win, dividend increase, favorable lawsuit settlement, competitor failure.
+  
+- **NEGATIVE**: The news suggests the stock price should FALL.
+  - Examples: Earnings miss, lowered guidance, lawsuit filing, CEO resignation (unexpected), dividend cut, regulatory probe.
+  
+- **NEUTRAL**: The news is unlikely to move the stock price significantly, or the impact is mixed/unclear.
+  - Examples: Routine filings, already known information, general sector commentary with no specific impact.
 
-print("-------------------")
+## CRITICAL NUANCE
+- **Settlements:** Paying a fine to settle a lawsuit can be POSITIVE (removes uncertainty) or NEGATIVE (loss of capital). Use context.
+- **M&A:** Being acquired is usually POSITIVE (premium paid). Acquiring another company is often NEGATIVE (short term execution risk), unless described as highly accretive.
 
-try:
-    # externalauth=True is what triggers Kerberos
-    conn = oracledb.connect(
-        dsn="YOUR_TNS_ALIAS", 
-        externalauth=True
-    )
-    print("Login Successful!")
-    conn.close()
-except oracledb.Error as e:
-    error_obj = e.args[0]
-    print("Login Failed!")
-    print(f"Error Code: {error_obj.code}")
-    print(f"Message:    {error_obj.message}")
+## OUTPUT FORMAT (JSON)
+{
+    "sentiment": "POSITIVE" | "NEGATIVE" | "NEUTRAL",
+    "confidence": 0.0 to 1.0,
+    "reasoning": "One sentence explaining why this is positive/negative for {company_name}."
+}
+
+## INPUT ARTICLE
+"""
 ```
