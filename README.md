@@ -1,85 +1,66 @@
-```python
-from __future__ import annotations
+Absolutely. Here is a more grounded version you can use.
 
-import sqlite3
-from pathlib import Path
-from typing import Any, Iterable, Optional
+### 1) What the tool does (plain English)
+This is a **trade alert investigation platform** for compliance/surveillance teams.  
+When a trade alert is flagged, it brings the key context together in one place:
 
-import pandas as pd
+- Alert details (who traded, what, when)
+- Price movement around the alert window
+- Related public news
+- AI-assisted analysis and recommendation
+- Case status updates and report export
 
+The goal is to help analysts decide:  
+**“Is this likely explainable by public information, or does it need deeper investigation?”**
 
-class SQLiteQueryRunner:
-    """
-    Ad-hoc SQLite runner:
-    - One short-lived connection per call (safe for notebooks/ad-hoc usage)
-    - SELECT -> pandas DataFrame
-    - UPDATE/DELETE/ALTER/INSERT -> commits automatically
-    """
+---
 
-    def __init__(self, db_path: str | Path):
-        self.db_path = str(db_path)
+### 2) AI / LLM / Agentic capabilities (without hype)
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+#### AI summary and recommendation
+- The system can generate a structured analysis for an alert and suggest:
+  - `DISMISS`
+  - `ESCALATE_L2`
+  - `NEEDS_REVIEW`
+- It does not replace analyst judgment; it supports it.
 
-    def select_df(
-        self,
-        query: str,
-        params: Optional[Iterable[Any]] = None,
-    ) -> pd.DataFrame:
-        q = query.strip().upper()
-        if not q.startswith("SELECT"):
-            raise ValueError("select_df only accepts SELECT queries.")
-        with self._connect() as conn:
-            return pd.read_sql_query(query, conn, params=params)
+#### Deterministic checks before AI
+- Before LLM reasoning is used, hard checks run first (data completeness, timestamps, causality rules).
+- Example: if news timing is missing or invalid, the system defaults to safer outcomes like `NEEDS_REVIEW`.
 
-    def execute_write(
-        self,
-        query: str,
-        params: Optional[Iterable[Any]] = None,
-    ) -> dict:
-        q = query.strip().upper()
-        allowed = ("UPDATE", "DELETE", "INSERT", "ALTER", "CREATE", "DROP")
-        if not q.startswith(allowed):
-            raise ValueError(
-                "execute_write only accepts UPDATE/DELETE/INSERT/ALTER/CREATE/DROP queries."
-            )
+This is important because it avoids “confident but weak” AI outputs.
 
-        conn = self._connect()
-        try:
-            cur = conn.cursor()
-            cur.execute(query, tuple(params) if params is not None else ())
-            conn.commit()  # <-- critical for persistence
-            return {
-                "rowcount": cur.rowcount,
-                "lastrowid": cur.lastrowid,
-                "query": query,
-            }
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+#### Agent-style analyst assistant
+- There is an assistant panel for investigation help (chat-style).
+- It can stream responses, keep session context/history, and show tool traces.
+- Practically: analysts can ask focused questions during investigation instead of manually stitching context every time.
 
+---
 
-runner = SQLiteQueryRunner("alerts.db")
+### 3) Technical highlights (practical, credible)
+- **Config-driven schema mapping**: works with mapped table/column names, so it can adapt to different DB layouts.
+- **FastAPI backend + Vue frontend**: clear API-driven architecture.
+- **Evidence model includes impact + materiality**:
+  - Impact score from market move abnormality (Z-score style approach)
+  - Materiality triplet (`P1P2P3`) for prominence, timing proximity, thematic relevance
+- **Report/artifact support**: generates downloadable investigation reports and session artifacts.
+- **Operational scripts**: schema validation, scoring recompute, migrations, and checks for safer rollout/change management.
+- **Observability-ready**: optional tracing support for model calls and debugging.
 
-# SELECT
-df = runner.select_df('SELECT status, COUNT(*) AS cnt FROM alerts GROUP BY status')
-print(df)
+---
 
-# UPDATE
-out = runner.execute_write(
-    'UPDATE "alerts" SET "status" = ? WHERE "status" = ?',
-    params=("NEEDS_REVIEW", "status"),
-)
-print(out)
+### 4) Business value (realistic framing)
+- **Saves analyst time**: less switching between systems for prices, news, and case notes.
+- **Improves consistency**: recommendations follow common policy logic, not just individual style.
+- **Improves escalation quality**: better signal on what truly needs L2 review.
+- **Supports audit/compliance**: recommendations are tied to explicit evidence and process steps.
+- **Keeps humans in control**: final case decision remains with analyst/team workflow.
 
-# ALTER
-runner.execute_write(
-    'ALTER TABLE "alerts" ADD COLUMN "status" TEXT DEFAULT "NEEDS_REVIEW"'
-)
+---
 
-```
+### 5) What to highlight when presenting it
+Use this positioning:
+
+- “This is **decision support**, not auto-enforcement.”
+- “It combines **rules + AI**, so it is safer than pure LLM-only workflows.”
+- “It improves speed and consistency, while keeping an auditable trail.”
